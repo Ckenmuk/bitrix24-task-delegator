@@ -39,6 +39,7 @@
     <div class="container">
         <h1>Делегатор задач</h1>
         <button id="authButton">Авторизоваться</button>
+        <button id="getTasksButton" style="display: none;">Получить задачи</button>
         <div id="tasks" style="display: none;">
             <h2>Список задач</h2>
             <table id="tasksTable">
@@ -74,6 +75,7 @@
         let accessToken = '';
 
         const authButton = document.getElementById('authButton');
+        const getTasksButton = document.getElementById('getTasksButton');
         const tasksDiv = document.getElementById('tasks');
         const tasksTable = document.getElementById('tasksTable').getElementsByTagName('tbody')[0];
         const delegateForm = document.getElementById('delegateForm');
@@ -101,7 +103,10 @@
                 }
 
                 accessToken = data.access_token;
-                fetchTasks();
+                console.log('Токен получен:', accessToken); // Отладка
+
+                // Показываем кнопку "Получить задачи"
+                getTasksButton.style.display = 'block';
             } catch (error) {
                 console.error('Ошибка при запросе токена:', error);
             }
@@ -114,6 +119,7 @@
             try {
                 const response = await fetch(tasksUrl);
                 const tasks = await response.json();
+                console.log('Задачи:', tasks); // Отладка
 
                 // Очищаем таблицу
                 tasksTable.innerHTML = '';
@@ -161,7 +167,12 @@
             }
         });
 
-        // Проверка авторизации и загрузка задач
+        // Обработка нажатия кнопки "Получить задачи"
+        getTasksButton.addEventListener('click', () => {
+            fetchTasks();
+        });
+
+        // Проверка авторизации
         const urlParams = new URLSearchParams(window.location.hash.substring(1)); // Используем хэш-фрагмент
         const code = urlParams.get('code');
 
