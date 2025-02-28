@@ -18,6 +18,21 @@
             padding: 10px 20px;
             font-size: 16px;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
     </style>
 </head>
 <body>
@@ -51,7 +66,12 @@
     </div>
 
     <script>
-        console.log('Скрипт запущен!'); // Отладка
+        const clientId = 'ваш_client_id'; // Замените на ваш client_id
+        const clientSecret = 'ваш_client_secret'; // Замените на ваш client_secret
+        const redirectUri = 'https://ckenmuk.github.io/bitrix24-task-delegator/callback'; // Убедитесь, что совпадает с настройками
+        const portalUrl = 'https://ваш_портал.bitrix24.ru'; // Замените на ваш портал
+
+        let accessToken = '';
 
         const authButton = document.getElementById('authButton');
         const tasksDiv = document.getElementById('tasks');
@@ -63,54 +83,90 @@
 
         // Шаг 1: Авторизация
         authButton.addEventListener('click', () => {
-            console.log('Кнопка "Авторизоваться" нажата'); // Отладка
-            window.location.href = 'http://localhost:3000/auth';
+            const authUrl = `${portalUrl}/oauth/authorize/?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}`;
+            window.location.href = authUrl;
         });
 
-        // Шаг 2: Получение списка задач
-        async function fetchTasks() {
-            console.log('Запрос к серверу...'); // Отладка
-            const response = await fetch('http://localhost:3000/tasks');
-            console.log('Ответ от сервера:', response); // Отладка
-            const tasks = await response.json();
-            console.log('Задачи:', tasks); // Отладка
+        // Шаг 2: Получение access_token
+        async function getAccessToken(code) {
+            const tokenUrl = `${portalUrl}/oauth/token/?grant_type=authorization_code&client_id=${clientId}&client_secret=${clientSecret}&code=${code}&redirect_uri=${redirectUri}`;
 
-            // Очищаем таблицу
-            tasksTable.innerHTML = '';
+            try {
+                const response = await fetch(tokenUrl);
+                const data = await response.json();
 
-            // Добавляем задачи в таблицу
-            tasks.forEach(task => {
-                const row = tasksTable.insertRow();
-                row.insertCell().textContent = task.id;
-                row.insertCell().textContent = task.title;
-                row.insertCell().textContent = task.description || 'Нет описания';
-                row.insertCell().textContent = task.responsibleId || 'Не назначен';
-            });
+                if (data.error) {
+                    console.error('Ошибка от Битрикс24:', data.error_description);
+                    return;
+                }
 
-            // Показываем список задач и форму делегирования
-            tasksDiv.style.display = 'block';
-            delegateForm.style.display = 'block';
+                accessToken = data.access_token;
+                fetchTasks();
+            } catch (error) {
+                console.error('Ошибка при запросе токена:', error);
+            }
         }
 
-        // Шаг 3: Делегирование задачи
+        // Шаг 3: Получение списка задач
+        async function fetchTasks() {
+            const tasksUrl = `${portalUrl}/rest/tasks.task.list?auth=${accessToken}`;
+
+            try {
+                const response = await fetch(tasksUrl);
+                const tasks = await response.json();
+
+                // Очищаем таблицу
+                tasksTable.innerHTML = '';
+
+                // Добавляем задачи в таблицу
+                tasks.forEach(task => {
+                    const row = tasksTable.insertRow();
+                    row.insertCell().textContent = task.id;
+                    row.insertCell().textContent = task.title;
+                    row.insertCell().textContent = task.description || 'Нет описания';
+                    row.insertCell().textContent = task.responsibleId || 'Не назначен';
+                });
+
+                // Показываем список задач и форму делегирования
+                tasksDiv.style.display = 'block';
+                delegateForm.style.display = 'block';
+            } catch (error) {
+                console.error('Ошибка при получении задач:', error);
+            }
+        }
+
+        // Шаг 4: Делегирование задачи
         delegateButton.addEventListener('click', async () => {
-            console.log('Кнопка "Делегировать" нажата'); // Отладка
             const taskId = taskIdInput.value;
             const userId = userIdInput.value;
 
-            const response = await fetch('http://localhost:3000/delegate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ taskId, userId })
-            });
-            const result = await response.json();
-            alert(result.result ? 'Задача делегирована!' : 'Ошибка');
+            const delegateUrl = `${portalUrl}/rest/tasks.task.update?auth=${accessToken}`;
+            const params = {
+                taskId,
+                fields: {
+                    RESPONSIBLE_ID: userId
+                }
+            };
+
+            try {
+                const response = await fetch(delegateUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
+                });
+                const result = await response.json();
+                alert(result.result ? 'Задача делегирована!' : 'Ошибка');
+            } catch (error) {
+                console.error('Ошибка при делегировании задачи:', error);
+            }
         });
 
-        // Автоматическая загрузка задач при открытии страницы
-        if (window.location.pathname === '/tasks') {
-            console.log('Загрузка задач...'); // Отладка
-            fetchTasks();
+        // Проверка авторизации и загрузка задач
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+
+        if (code) {
+            getAccessToken(code);
         }
     </script>
 </body>
